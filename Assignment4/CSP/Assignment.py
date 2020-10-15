@@ -15,6 +15,10 @@ class CSP:
         # the variable pair (i, j)
         self.constraints = {}
 
+        # Store number of failed backtracks
+        self.called_backtracks = 0
+        self.failed_backtracks = 0
+
     def add_variable(self, name, domain):
         """Add a new variable to the CSP. 'name' is the variable name
         and 'domain' is a list of the legal values for the variable.
@@ -109,6 +113,8 @@ class CSP:
         assignments and inferences that took place in previous
         iterations of the loop.
         """
+
+        self.called_backtracks += 1
         
         # Assignment is done when all variables have 1 legal value
         done = True
@@ -118,8 +124,10 @@ class CSP:
                 break
         if done: return assignment    
 
-        var = self.select_unassigned_variable(assignment)   
+        # Select variable with MVR
+        var = self.select_unassigned_variable(assignment)  
 
+        # Values are not extracted using any specific heruistic
         for value in assignment[var]:
             assignment_copy = copy.deepcopy(assignment)
             assignment_copy[var] = value
@@ -129,6 +137,7 @@ class CSP:
                 if result:
                     return result
         
+        self.failed_backtracks += 1
         return False
 
     def select_unassigned_variable(self, assignment):
@@ -148,10 +157,10 @@ class CSP:
         the lists of legal values for each undecided variable. 'queue'
         is the initial queue of arcs that should be visited.
         """
-        while len(queue):
-            i, j = queue.pop()
-            if (self.revise(assignment, i, j)):
-                if (len(assignment[i]) == 0): return False
+        while queue:
+            i, j = queue.pop(0)
+            if self.revise(assignment, i, j):
+                if len(assignment[i]) == 0: return False
                 for k, _ in self.get_all_neighboring_arcs(i):
                     if k == j: continue
                     queue.append((k, i)) 
@@ -172,12 +181,11 @@ class CSP:
         revised = False
         for x in assignment[i]:
             # Get all pairs (x,y)
-            pairs = self.get_all_possible_pairs(x, assignment[j])
+            pairs = list(self.get_all_possible_pairs(x, assignment[j]))
 
             # Filter constraints with pairs. If no constraints left: revise.
             if (len(list(filter(lambda pair: pair in pairs, self.constraints[i][j]))) == 0):
-                if type(assignment[i]) == list:
-                    print(assignment[i], x)
+                if x in assignment[i]:
                     assignment[i].remove(x)
                 revised = True
 
@@ -234,17 +242,34 @@ def print_sudoku_solution(solution):
     """Convert the representation of a Sudoku solution as returned from
     the method CSP.backtracking_search(), into a human readable
     representation.
+
+    NB: Modified to produce correct output
     """
     for row in range(9):
         for col in range(9):
-            print(solution['%d-%d' % (row, col)][0]),
+            print(solution['%d-%d' % (row, col)][0], " ", end="")
             if col == 2 or col == 5:
-                print('|'),
+                print('|', " ", end="")
         print("")
         if row == 2 or row == 5:
-            print('------+-------+------')
+            print('---------+-----------+---------')
 
 if __name__ == "__main__":
-    csp = create_sudoku_csp("easy.txt")
+    import argparse
+
+    # Parse argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sudoku", help="path/to/sudoku/txtfile", default="veryhard.txt")
+    args = parser.parse_args()
+
+    # Create CSP
+    csp = create_sudoku_csp(args.sudoku)
+
+    # Solve and print solution
     sol = csp.backtracking_search()
+
+    print("")
+    print(args.sudoku.split(".")[0].upper())
     print_sudoku_solution(sol)
+    print(f"Called backtracks: {csp.called_backtracks}")
+    print(f"Failed backtracks: {csp.failed_backtracks}")
